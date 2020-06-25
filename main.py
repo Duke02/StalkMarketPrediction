@@ -93,6 +93,7 @@ def predict_turnip_prices(filename: str) -> int:
 
     data_print = '\n'.join([f'{time_frames[i]}: {prices[i]}' for i in range(len(time_frames))])
     print(f'Input data: \n{data_print}')
+    print(f'Model being used: {model.__class__.__name__}')
     print(f'Model parameters: coefficients: {model.coef_}, intercepts: {model.intercept_}')
 
     last_time_frame = time_frames[-1] + 1
