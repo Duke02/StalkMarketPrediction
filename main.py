@@ -89,7 +89,11 @@ def predict_turnip_prices(filename: str) -> int:
     time_frames = df['time_frame'].values.reshape((-1, 1))
     prices = df['price'].values.reshape((-1, 1))
 
-    model = LinearRegression().fit(time_frames, prices)
+    model: LinearRegression = LinearRegression().fit(time_frames, prices)
+
+    data_print = '\n'.join([f'{time_frames[i]}: {prices[i]}' for i in range(len(time_frames))])
+    print(f'Input data: \n{data_print}')
+    print(f'Model parameters: coefficients: {model.coef_}, intercepts: {model.intercept_}')
 
     last_time_frame = time_frames[-1] + 1
     prediction = model.predict([last_time_frame])
