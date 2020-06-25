@@ -1,6 +1,5 @@
 import datetime as dt
 
-import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
 
@@ -46,17 +45,11 @@ def get_time_frame_dist(dt1: dt.datetime, dt2: dt.datetime) -> int:
     turnip prices will change twice in a day, once when Nook's Cranny opens at 8am,
     and again at noon, when it is evening.
 
-    :param d1: date that corresponds with t1
-    :param t1: time that corresponds with d1
-    :param d2: date that corresponds with t2
-    :param t2: time that corresponds with d2
+    :param dt1: The datetime that's before dt2
+    :param dt2: The datetime that's after dt1
     :return: the number of time frames between the given dates and times.
     """
-    print(f'dt1: {dt1}, type: {type(dt1)}')
-    print(f'dt2: {dt2}, type: {type(dt2)}')
-
     diff_days = (dt2 - dt1).days
-    print(f'Diff days: {diff_days}')
     output = diff_days * 2
 
     if is_evening(dt1.time()) != is_evening(dt2.time()):
@@ -75,12 +68,9 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
     prices = df['price']
     dates_and_times = pd.to_datetime(df['date_time'])
 
-    print(dates_and_times)
-
     time_frames = []
 
     for index, dnt in enumerate(dates_and_times.values):
-        print(f'{index}: {dnt}')
         if index == 0:
             time_frames += [0]
         else:
@@ -96,17 +86,12 @@ def predict_turnip_prices(filename: str) -> int:
     df_raw: pd.DataFrame = get_data(filename)
     df: pd.DataFrame = organize_data(df_raw)
 
-    # This is the wrong shape.
-    time_frames = np.array(df['time_frame']).reshape(-1, 1)
-    prices = np.array(df['price']).reshape(-1, 1)
+    time_frames = df['time_frame'].values.reshape((-1, 1))
+    prices = df['price'].values.reshape((-1, 1))
 
-    print(f'Time Frames Size: {time_frames.size} | Shape: {time_frames.shape}')
-    print(f'Prices Size: {prices.size} | Shape: {prices.shape}')
+    model = LinearRegression().fit(time_frames, prices)
 
-    model = LinearRegression().fit(df['time_frame'],
-                                   df['price'])
-
-    last_time_frame = df['time_frame'][-1]
+    last_time_frame = time_frames[-1] + 1
     prediction = model.predict([last_time_frame])
     return prediction[0]
 
