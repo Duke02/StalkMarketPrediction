@@ -58,13 +58,23 @@ def get_time_frame_dist(dt1: dt.datetime, dt2: dt.datetime) -> int:
     return output
 
 
-def get_data(filename: str) -> pd.DataFrame:
-    if filename.endswith('.csv'):
-        return pd.read_csv(filename)
+def get_data(filepath: str) -> pd.DataFrame:
+    """
+    Gets the data at the provided file path.
+    :param filepath: The file path that holds the data to be loaded into the program.
+    :return: The data frame holding the turnip prices and datetimes for those prices.
+    """
+    if filepath.endswith('.csv'):
+        return pd.read_csv(filepath)
     raise ValueError('Unsupported data file. Can only support CSV\'s.')
 
 
 def organize_data(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Organizes and cleans the provided data to use time frames, rather than datetimes as the independent variable.
+    :param df: The raw data frame.
+    :return: The cleaned up data frame.
+    """
     prices = df['price']
     dates_and_times = pd.to_datetime(df['date_time'])
 
@@ -82,8 +92,13 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(data={'time_frame': time_frames, 'price': prices})
 
 
-def predict_turnip_prices(filename: str) -> int:
-    df_raw: pd.DataFrame = get_data(filename)
+def predict_turnip_prices(filepath: str) -> float:
+    """
+    Predicts the stalk market prices for the next time frame with the data at the provided file path.
+    :param filepath: The path to the data file.
+    :return: The prediction for turnip prices in the next time frame.
+    """
+    df_raw: pd.DataFrame = get_data(filepath)
     df: pd.DataFrame = organize_data(df_raw)
 
     time_frames = df['time_frame'].values.reshape((-1, 1))
