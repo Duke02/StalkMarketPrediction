@@ -7,6 +7,8 @@ from sklearn.linear_model import LinearRegression
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import PolynomialFeatures
 
+from gaussian_features import GaussianFeatures
+
 
 def is_morning(t: dt.time) -> bool:
     """
@@ -96,6 +98,19 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(data={'time_frame': time_frames, 'price': prices})
 
 
+def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series):
+    n: int = 20
+    gauss_model = make_pipeline(GaussianFeatures(20), LinearRegression())
+
+    gauss_model.fit(time_frames.values[:, np.newaxis], prices)
+
+    next_time_frame = time_frames.values[-1] + 1
+    # TODO: getting Type Error here.
+    prediction = gauss_model.predict([[[next_time_frame]]])
+
+    return [next_time_frame, prediction], None
+
+
 def predict_with_improved_linear_model(time_frames: pd.Series, prices: pd.Series):
     degrees = 3
     poly_model = make_pipeline(PolynomialFeatures(degrees, include_bias=True),
@@ -169,7 +184,8 @@ def predict_turnip_prices(filepath: str) -> float:
     print(f'Input data: \n{data_print}')
 
     print('How would you like to predict the next turnip price?')
-    model_input: str = input('[L]inear Regression, [P]olyfit, [I]mproved Linear Regression\n')[0].lower()
+    model_input: str = input('[L]inear Regression, [P]olyfit, [I]mproved Linear Regression, [G]aussian Features\n')[
+        0].lower()
 
     if model_input == 'l':
         prediction, model = predict_with_linear_model(time_frames, prices)
@@ -177,6 +193,8 @@ def predict_turnip_prices(filepath: str) -> float:
         prediction, model = predict_with_polyfit(time_frames, prices)
     elif model_input == 'i':
         prediction, model = predict_with_improved_linear_model(time_frames, prices)
+    elif model_input == 'g':
+        prediction, model = predict_with_gaussian_features(time_frames, prices)
     else:
         print('Invalid model type.')
         return 0.0
