@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
+from sklearn.pipeline import make_pipeline
+from sklearn.preprocessing import PolynomialFeatures
 
 
 def is_morning(t: dt.time) -> bool:
@@ -94,7 +96,19 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(data={'time_frame': time_frames, 'price': prices})
 
 
-def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series) -> float:
+def predict_with_improved_linear_model(time_frames: pd.Series, prices: pd.Series):
+    degrees = 3
+    poly_model = make_pipeline(PolynomialFeatures(degrees, include_bias=True),
+                               LinearRegression())
+    poly_model.fit(time_frames[:, np.newaxis], prices)
+
+    next_time_frame = time_frames.values[-1] + 1
+    prediction = poly_model.predict([[next_time_frame]])
+
+    return [next_time_frame, prediction], None
+
+
+def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series):
     shaped_time_frames: pd.Series = time_frames.values.reshape((-1, 1))
     shaped_prices: pd.Series = prices.values.reshape((-1, 1))
     model: LinearRegression = LinearRegression().fit(shaped_time_frames, shaped_prices)
@@ -155,19 +169,22 @@ def predict_turnip_prices(filepath: str) -> float:
     print(f'Input data: \n{data_print}')
 
     print('How would you like to predict the next turnip price?')
-    model_input: str = input('[L]inear Regression, [P]olyfit\n')[0].lower()
+    model_input: str = input('[L]inear Regression, [P]olyfit, [I]mproved Linear Regression\n')[0].lower()
 
     if model_input == 'l':
         prediction, model = predict_with_linear_model(time_frames, prices)
     elif model_input == 'p':
         prediction, model = predict_with_polyfit(time_frames, prices)
+    elif model_input == 'i':
+        prediction, model = predict_with_improved_linear_model(time_frames, prices)
     else:
         print('Invalid model type.')
         return 0.0
 
-    plot(time_frames, prices, prediction, model)
+    if model is not None:
+        plot(time_frames, prices, prediction, model)
 
-    return prediction
+    return prediction[1]
 
 
 if __name__ == '__main__':
