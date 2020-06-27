@@ -163,7 +163,7 @@ def plot(time_frames: pd.Series, prices: pd.Series, prediction, model_coefficien
         for index in range(0, len(prediction)):
             time_frame = prediction[index][0]
             prediction_point = prediction[index][1]
-            annotation_text: str = f'Next price ({time_frame}, {prediction_point:.1f})'
+            annotation_text: str = f'({time_frame}, {prediction_point:.1f})'
             plt.annotate(annotation_text, (time_frame, prediction_point))
 
     plt.show()
