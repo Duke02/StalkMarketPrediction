@@ -4,7 +4,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression
-from sklearn.pipeline import make_pipeline
+from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import PolynomialFeatures
 
 from gaussian_features import GaussianFeatures
@@ -98,9 +98,8 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(data={'time_frame': time_frames, 'price': prices})
 
 
-def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series):
-    n: int = 20
-    gauss_model = make_pipeline(GaussianFeatures(20), LinearRegression())
+def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, n: int = 20):
+    gauss_model = make_pipeline(GaussianFeatures(n), LinearRegression())
 
     gauss_model.fit(time_frames.values[:, np.newaxis], prices)
 
@@ -108,19 +107,24 @@ def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series):
     # TODO: getting Type Error here.
     prediction = gauss_model.predict([[[next_time_frame]]])
 
-    return [next_time_frame, prediction], None
+    return [next_time_frame, prediction], gauss_model.predict
 
 
-def predict_with_improved_linear_model(time_frames: pd.Series, prices: pd.Series):
-    degrees = 3
-    poly_model = make_pipeline(PolynomialFeatures(degrees, include_bias=True),
-                               LinearRegression())
+def predict_with_improved_linear_model(time_frames: pd.Series, prices: pd.Series, degrees: int = 2,
+                                       include_bias: bool = False):
+    poly = PolynomialFeatures(degrees, include_bias=include_bias)
+    linear = LinearRegression()
+    steps = [('poly', poly), ('linear', linear)]
+    poly_model = Pipeline(steps)
     poly_model.fit(time_frames[:, np.newaxis], prices)
 
     next_time_frame = time_frames.values[-1] + 1
     prediction = poly_model.predict([[next_time_frame]])
 
-    return [next_time_frame, prediction], None
+    modified_prices = np.poly1d(poly_model.predict(time_frames[:, np.newaxis]))
+    print(modified_prices)
+
+    return [next_time_frame, prediction], poly_model.predict
 
 
 def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series):
@@ -130,18 +134,15 @@ def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series):
 
     print(f'Model parameters: coefficients: {model.coef_}, intercepts: {model.intercept_}')
 
-    coefficients = np.poly1d([model.coef_[0][0], model.intercept_[0]])
-
     next_time_frame = shaped_time_frames[-1] + 1
     prediction = model.predict([next_time_frame])
-    return [next_time_frame, prediction], coefficients
+    return [next_time_frame, prediction], model.predict
 
 
-def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series):
+def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series, degrees: int = 2):
     shaped_time_frames: pd.Series = time_frames.values.reshape(-1)
     shaped_prices: pd.Series = prices.values.reshape(-1)
 
-    degrees: int = 2
     poly_coefficients = np.polyfit(shaped_time_frames, shaped_prices, degrees)
 
     print(f'Polynomial coefficients: {poly_coefficients}')
@@ -163,7 +164,7 @@ def plot(time_frames: pd.Series, prices: pd.Series, prediction, model_coefficien
     dummy_x: np.ndarray = np.linspace(min_tf - tf_stddev, max_tf + tf_stddev, n)
 
     plt.plot(time_frames, prices, '.',
-             dummy_x, model_coefficients(dummy_x), '-',
+             dummy_x, model_coefficients(np.reshape(dummy_x, (-1, 1))), '-',
              prediction[0], prediction[1], '*')
     plt.show()
 
