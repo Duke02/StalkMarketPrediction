@@ -98,65 +98,52 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(data={'time_frame': time_frames, 'price': prices})
 
 
-def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, n: int = 20):
+def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, num_predictions: int, n: int = 20):
     gauss_model = make_pipeline(GaussianFeatures(n), LinearRegression())
 
     gauss_model.fit(time_frames.values[:, np.newaxis], prices)
 
-    next_time_frame = np.array([time_frames.values[-1] + 1])
+    last_time_frame: int = time_frames.values[-1]
+    prediction_x = np.arange(last_time_frame + 1, last_time_frame + num_predictions)
 
-    prediction = gauss_model.predict(next_time_frame[:, np.newaxis])
+    predictions = gauss_model.predict(prediction_x[:, np.newaxis])
 
-    return [next_time_frame, prediction], gauss_model.predict, f'N: {n}'
+    return np.array(list(zip(prediction_x, predictions))), gauss_model.predict, f'N: {n}'
 
 
-def predict_with_improved_linear_model(time_frames: pd.Series, prices: pd.Series, degrees: int = 2,
-                                       include_bias: bool = False):
+def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
+                         degrees: int = 2, include_bias: bool = False):
     poly = PolynomialFeatures(degrees, include_bias=include_bias)
     linear = LinearRegression()
     steps = [('poly', poly), ('linear', linear)]
     poly_model = Pipeline(steps)
     poly_model.fit(time_frames[:, np.newaxis], prices)
 
-    next_time_frame = time_frames.values[-1] + 1
-    prediction = poly_model.predict([[next_time_frame]])
+    last_time_frame = time_frames.values[-1]
+    prediction_x = np.arange(last_time_frame + 1, last_time_frame + num_predictions)
+    prediction = poly_model.predict(np.reshape(prediction_x, (-1, 1)))
 
-    modified_prices = np.poly1d(poly_model.predict(time_frames[:, np.newaxis]))
-    print(modified_prices)
-
-    return [next_time_frame, prediction], poly_model.predict, f'Degrees: {degrees}'
+    return np.array(list(zip(prediction_x, prediction))), poly_model.predict, f'Degrees: {degrees}'
 
 
-def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series):
+def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series, num_predictions: int):
     shaped_time_frames: pd.Series = time_frames.values.reshape((-1, 1))
     shaped_prices: pd.Series = prices.values.reshape((-1, 1))
     model: LinearRegression = LinearRegression().fit(shaped_time_frames, shaped_prices)
 
     print(f'Model parameters: coefficients: {model.coef_}, intercepts: {model.intercept_}')
 
-    next_time_frame = shaped_time_frames[-1] + 1
-    prediction = np.reshape(model.predict([next_time_frame]), (-1))
-    return [next_time_frame,
-            prediction], model.predict, f'Coefficient: {model.coef_[0][0]:.2f}, Intercept: {model.intercept_[0]:.2f}'
+    last_time_frame = shaped_time_frames[-1]
+    prediction_x = np.reshape(np.arange(last_time_frame + 1, last_time_frame + num_predictions), (-1, 1))
 
+    prediction = model.predict(prediction_x)
 
-def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series, degrees: int = 2):
-    shaped_time_frames: pd.Series = time_frames.values.reshape(-1)
-    shaped_prices: pd.Series = prices.values.reshape(-1)
-
-    poly_coefficients = np.polyfit(shaped_time_frames, shaped_prices, degrees)
-
-    print(f'Polynomial coefficients: {poly_coefficients}')
-
-    poly = np.poly1d(poly_coefficients)
-
-    next_time_frame = shaped_time_frames[-1] + 1
-    prediction = poly(next_time_frame)
-    return [next_time_frame, prediction], poly, f'Degrees: {degrees}'
+    return np.array(list(zip(prediction_x,
+                             prediction))), model.predict, f'Coefficient: {model.coef_[0][0]:.2f}, Intercept: {model.intercept_[0]:.2f}'
 
 
 def plot(time_frames: pd.Series, prices: pd.Series, prediction, model_coefficients: np.ndarray, name: str,
-         subtitle: str):
+         subtitle: str, annotate: bool = False):
     min_tf: float = time_frames.min()
     max_tf: float = time_frames.max()
     tf_stddev: float = time_frames.std()
@@ -168,15 +155,16 @@ def plot(time_frames: pd.Series, prices: pd.Series, prediction, model_coefficien
     plt.title(f'{name}\n({subtitle})')
     plt.plot(time_frames, prices, '.',
              dummy_x, model_coefficients(np.reshape(dummy_x, (-1, 1))), '-',
-             prediction[0], prediction[1], '*')
+             prediction[:, 0], prediction[:, 1], '*')
     plt.xlabel('Time Frames')
     plt.ylabel('Bells')
 
-    for index in range(0, len(prediction), 2):
-        time_frame = prediction[index][0]
-        prediction_point = np.reshape(prediction[index + 1], (-1))[0]
-        annotation_text: str = f'Next price ({time_frame}, {prediction_point:.1f})'
-        plt.annotate(annotation_text, (time_frame, prediction_point))
+    if annotate:
+        for index in range(0, len(prediction)):
+            time_frame = prediction[index][0]
+            prediction_point = prediction[index][1]
+            annotation_text: str = f'Next price ({time_frame}, {prediction_point:.1f})'
+            plt.annotate(annotation_text, (time_frame, prediction_point))
 
     plt.show()
 
@@ -202,7 +190,6 @@ def predict_turnip_prices(filepath: str) -> float:
 
     models = {'l': ('Linear Regression', predict_with_linear_model),
               'p': ('Polyfit', predict_with_polyfit),
-              'i': ('Improved Linear Regression', predict_with_improved_linear_model),
               'g': ('Gaussian Features', predict_with_gaussian_features)}
 
     print('How would you like to predict the next turnip price?')
@@ -212,8 +199,11 @@ def predict_turnip_prices(filepath: str) -> float:
 
     model_input: str = input('> ')[0].lower()
 
+    print('How many time frames (morning/evenings) would you like to see into the future?')
+    num_predictions = int(input('> '))
+
     if model_input in models.keys():
-        prediction, model, subtitle = models[model_input][1](time_frames, prices)
+        prediction, model, subtitle = models[model_input][1](time_frames, prices, num_predictions)
     else:
         print('Invalid model type.')
         return 0.0
@@ -221,9 +211,9 @@ def predict_turnip_prices(filepath: str) -> float:
     if model is not None:
         plot(time_frames, prices, prediction, model, models[model_input][0], subtitle)
 
-    return prediction[1]
+    return prediction
 
 
 if __name__ == '__main__':
-    next_turnip_price = predict_turnip_prices('data/prices_trystan.csv')
-    print(f'Next Turnip Price might be {next_turnip_price}')
+    next_turnip_prices = predict_turnip_prices('data/prices_trystan.csv')
+    print(f'Next Turnip Prices might be:\n{next_turnip_prices}')
