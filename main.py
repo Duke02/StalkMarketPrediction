@@ -1,4 +1,6 @@
+import argparse
 import datetime as dt
+from sys import argv
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -64,6 +66,27 @@ def get_time_frame_dist(dt1: dt.datetime, dt2: dt.datetime) -> int:
     return output
 
 
+def parse_args():
+    parser: argparse.ArgumentParser = argparse.ArgumentParser(
+        description='Predict future turnip prices in Animal Crossing: New Horizons')
+    parser.add_argument('-f', '--filepath', required=True, type=str,
+                        help='The file that holds the previous turnip prices.')
+    parser.add_argument('-M', '--model', required=False, type=str, choices=['l', 'p', 'g', 'r'], default=None,
+                        help='The model to use. A prompt with minor explanations will be provided if this arg isn\'t '
+                             'used.')
+    parser.add_argument('-P', '--predictions', required=False, type=int, default=1,
+                        help='The number of possible future turnip prices the model will output. Default is 1.')
+    parser.add_argument('-N', '--gaussian_features', required=False, type=int, default=20,
+                        help='The number of gaussian features to use with using the Gaussian-based models (r, '
+                             'g). Default is 20.')
+    parser.add_argument('-a', '--alpha', required=False, type=float, default=.1,
+                        help='The alpha value to use for regularized models (r). Default value is .1.')
+    parser.add_argument('-d', '--degrees', required=False, type=int, default=2,
+                        help='The number of degrees to use for the polynomial based models (p). Default is 2.')
+
+    return parser.parse_args(argv[1:])
+
+
 def get_data(filepath: str) -> pd.DataFrame:
     """
     Gets the data at the provided file path.
@@ -98,23 +121,25 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(data={'time_frame': time_frames, 'price': prices})
 
 
-def predict_with_regulated_gaussian(time_frames: pd.Series, prices: pd.Series, num_predictions: int, n: int = 20,
-                                    alpha: float = .1):
+def predict_with_regulated_gaussian(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
+                                    args: argparse.Namespace):
     # Since the data is in the range of 30-500, we can assume that the input data is dense.
     # So an L2 Norm using Ridge is probably best, rather than the L1 Norm, Lasso
 
-    model = make_pipeline(GaussianFeatures(30), Ridge(alpha=alpha))
+    model = make_pipeline(GaussianFeatures(N=args.gaussian_features), Ridge(alpha=args.alpha))
     model.fit(time_frames.values[:, np.newaxis], prices)
 
     last_time_frame: int = time_frames.values[-1]
     prediction_x = np.arange(last_time_frame + 1, last_time_frame + num_predictions)
     predictions = model.predict(prediction_x[:, np.newaxis])
 
-    return np.array(list(zip(prediction_x, predictions))), model.predict, f'N: {n}, L2 a: {alpha}'
+    return np.array(
+        list(zip(prediction_x, predictions))), model.predict, f'N: {args.gaussian_features}, L2 a: {args.alpha}'
 
 
-def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, num_predictions: int, n: int = 20):
-    gauss_model = make_pipeline(GaussianFeatures(n), LinearRegression())
+def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
+                                   args: argparse.Namespace):
+    gauss_model = make_pipeline(GaussianFeatures(args.gaussian_features), LinearRegression())
 
     gauss_model.fit(time_frames.values[:, np.newaxis], prices)
 
@@ -123,12 +148,11 @@ def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, nu
 
     predictions = gauss_model.predict(prediction_x[:, np.newaxis])
 
-    return np.array(list(zip(prediction_x, predictions))), gauss_model.predict, f'N: {n}'
+    return np.array(list(zip(prediction_x, predictions))), gauss_model.predict, f'N: {args.gaussian_features}'
 
 
-def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
-                         degrees: int = 2, include_bias: bool = False):
-    poly = PolynomialFeatures(degrees, include_bias=include_bias)
+def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series, num_predictions: int, args: argparse.Namespace):
+    poly = PolynomialFeatures(degree=args.degrees, include_bias=False)
     linear = LinearRegression()
     steps = [('poly', poly), ('linear', linear)]
     poly_model = Pipeline(steps)
@@ -138,10 +162,11 @@ def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series, num_predicti
     prediction_x = np.arange(last_time_frame + 1, last_time_frame + num_predictions)
     prediction = poly_model.predict(np.reshape(prediction_x, (-1, 1)))
 
-    return np.array(list(zip(prediction_x, prediction))), poly_model.predict, f'Degrees: {degrees}'
+    return np.array(list(zip(prediction_x, prediction))), poly_model.predict, f'Degrees: {args.degrees}'
 
 
-def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series, num_predictions: int):
+def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
+                              args: argparse.Namespace):
     shaped_time_frames: pd.Series = time_frames.values.reshape((-1, 1))
     shaped_prices: pd.Series = prices.values.reshape((-1, 1))
     model: LinearRegression = LinearRegression().fit(shaped_time_frames, shaped_prices)
@@ -188,13 +213,13 @@ def get_option_print(option: str) -> str:
     return f'[{option[0]}]{option[1:]}'
 
 
-def predict_turnip_prices(filepath: str) -> float:
+def predict_turnip_prices(args: argparse.Namespace) -> float:
     """
     Predicts the stalk market prices for the next time frame with the data at the provided file path.
-    :param filepath: The path to the data file.
+    :param args: The arguments the user has put in.
     :return: The prediction for turnip prices in the next time frame.
     """
-    df_raw: pd.DataFrame = get_data(filepath)
+    df_raw: pd.DataFrame = get_data(args.filepath)
     df: pd.DataFrame = organize_data(df_raw)
 
     time_frames = df['time_frame']
@@ -208,18 +233,20 @@ def predict_turnip_prices(filepath: str) -> float:
               'g': ('Gaussian Features', predict_with_gaussian_features),
               'r': ('Regularized Gaussian', predict_with_regulated_gaussian)}
 
-    print('How would you like to predict the next turnip price?')
+    if args.model is None:
+        print('How would you like to predict the next turnip price?')
 
-    for model_val in models.values():
-        print(f'{get_option_print(model_val[0])}')
+        for model_val in models.values():
+            print(f'{get_option_print(model_val[0])}')
 
-    model_input: str = input('> ')[0].lower()
+        model_input: str = input('> ')[0].lower()
+    else:
+        model_input: str = args.model
 
-    print('How many time frames (morning/evenings) would you like to see into the future?')
-    num_predictions = int(input('> '))
+    num_predictions: int = args.predictions
 
     if model_input in models.keys():
-        prediction, model, subtitle = models[model_input][1](time_frames, prices, num_predictions + 1)
+        prediction, model, subtitle = models[model_input][1](time_frames, prices, num_predictions + 1, args)
     else:
         print('Invalid model type.')
         return 0.0
@@ -231,5 +258,6 @@ def predict_turnip_prices(filepath: str) -> float:
 
 
 if __name__ == '__main__':
-    next_turnip_prices = predict_turnip_prices('data/prices_trystan.csv')
+    arguments = parse_args()
+    next_turnip_prices = predict_turnip_prices(arguments)
     print(f'Next Turnip Prices might be:\n{next_turnip_prices}')
