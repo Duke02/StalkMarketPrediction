@@ -103,11 +103,11 @@ def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, n:
 
     gauss_model.fit(time_frames.values[:, np.newaxis], prices)
 
-    next_time_frame = time_frames.values[-1] + 1
-    # TODO: getting Type Error here.
-    prediction = gauss_model.predict([[[next_time_frame]]])
+    next_time_frame = np.array([time_frames.values[-1] + 1])
 
-    return [next_time_frame, prediction], gauss_model.predict
+    prediction = gauss_model.predict(next_time_frame[:, np.newaxis])
+
+    return [next_time_frame, prediction], gauss_model.predict, f'N: {n}'
 
 
 def predict_with_improved_linear_model(time_frames: pd.Series, prices: pd.Series, degrees: int = 2,
