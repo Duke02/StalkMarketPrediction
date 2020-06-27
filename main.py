@@ -124,7 +124,7 @@ def predict_with_improved_linear_model(time_frames: pd.Series, prices: pd.Series
     modified_prices = np.poly1d(poly_model.predict(time_frames[:, np.newaxis]))
     print(modified_prices)
 
-    return [next_time_frame, prediction], poly_model.predict
+    return [next_time_frame, prediction], poly_model.predict, f'Degrees: {degrees}'
 
 
 def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series):
@@ -136,7 +136,8 @@ def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series):
 
     next_time_frame = shaped_time_frames[-1] + 1
     prediction = model.predict([next_time_frame])
-    return [next_time_frame, prediction], model.predict
+    return [next_time_frame,
+            prediction], model.predict, f'Coefficient: {model.coef_[0][0]:.2f}, Intercept: {model.intercept_[0]:.2f}'
 
 
 def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series, degrees: int = 2):
@@ -151,10 +152,11 @@ def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series, degrees: int
 
     next_time_frame = shaped_time_frames[-1] + 1
     prediction = poly(next_time_frame)
-    return [next_time_frame, prediction], poly
+    return [next_time_frame, prediction], poly, f'Degrees: {degrees}'
 
 
-def plot(time_frames: pd.Series, prices: pd.Series, prediction, model_coefficients: np.ndarray):
+def plot(time_frames: pd.Series, prices: pd.Series, prediction, model_coefficients: np.ndarray, name: str,
+         subtitle: str):
     min_tf: float = time_frames.min()
     max_tf: float = time_frames.max()
     tf_stddev: float = time_frames.std()
@@ -163,9 +165,22 @@ def plot(time_frames: pd.Series, prices: pd.Series, prediction, model_coefficien
 
     dummy_x: np.ndarray = np.linspace(min_tf - tf_stddev, max_tf + tf_stddev, n)
 
+    plt.title(f'{name}\n({subtitle})')
     plt.plot(time_frames, prices, '.',
              dummy_x, model_coefficients(np.reshape(dummy_x, (-1, 1))), '-',
              prediction[0], prediction[1], '*')
+    plt.xlabel('Time Frames')
+    plt.ylabel('Bells')
+
+    for index in range(0, len(prediction), 2):
+        print(index)
+        time_frame = prediction[index][0]
+        prediction_point = prediction[index + 1][0]
+        print(prediction_point)
+        annotation_text: str = f'Next price ({time_frame}, {prediction_point:.1f})'
+        print(annotation_text)
+        plt.annotate(annotation_text, (time_frame, prediction_point))
+
     plt.show()
 
 
@@ -188,20 +203,19 @@ def predict_turnip_prices(filepath: str) -> float:
     model_input: str = input('[L]inear Regression, [P]olyfit, [I]mproved Linear Regression, [G]aussian Features\n')[
         0].lower()
 
-    if model_input == 'l':
-        prediction, model = predict_with_linear_model(time_frames, prices)
-    elif model_input == 'p':
-        prediction, model = predict_with_polyfit(time_frames, prices)
-    elif model_input == 'i':
-        prediction, model = predict_with_improved_linear_model(time_frames, prices)
-    elif model_input == 'g':
-        prediction, model = predict_with_gaussian_features(time_frames, prices)
+    models = {'l': ('Linear Regression', predict_with_linear_model),
+              'p': ('Polyfit', predict_with_polyfit),
+              'i': ('Improved Linear Regression', predict_with_improved_linear_model),
+              'g': ('Gaussian Features', predict_with_gaussian_features)}
+
+    if model_input in models.keys():
+        prediction, model, subtitle = models[model_input][1](time_frames, prices)
     else:
         print('Invalid model type.')
         return 0.0
 
     if model is not None:
-        plot(time_frames, prices, prediction, model)
+        plot(time_frames, prices, prediction, model, models[model_input][0], subtitle)
 
     return prediction[1]
 
