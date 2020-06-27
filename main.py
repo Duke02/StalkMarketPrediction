@@ -219,7 +219,7 @@ def predict_turnip_prices(filepath: str) -> float:
     num_predictions = int(input('> '))
 
     if model_input in models.keys():
-        prediction, model, subtitle = models[model_input][1](time_frames, prices, num_predictions)
+        prediction, model, subtitle = models[model_input][1](time_frames, prices, num_predictions + 1)
     else:
         print('Invalid model type.')
         return 0.0
