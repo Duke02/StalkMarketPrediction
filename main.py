@@ -3,7 +3,7 @@ import datetime as dt
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
-from sklearn.linear_model import LinearRegression
+from sklearn.linear_model import LinearRegression, Ridge
 from sklearn.pipeline import make_pipeline, Pipeline
 from sklearn.preprocessing import PolynomialFeatures
 
@@ -98,6 +98,21 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(data={'time_frame': time_frames, 'price': prices})
 
 
+def predict_with_regulated_gaussian(time_frames: pd.Series, prices: pd.Series, num_predictions: int, n: int = 20,
+                                    alpha: float = .1):
+    # Since the data is in the range of 30-500, we can assume that the input data is dense.
+    # So an L2 Norm using Ridge is probably best, rather than the L1 Norm, Lasso
+
+    model = make_pipeline(GaussianFeatures(30), Ridge(alpha=alpha))
+    model.fit(time_frames.values[:, np.newaxis], prices)
+
+    last_time_frame: int = time_frames.values[-1]
+    prediction_x = np.arange(last_time_frame + 1, last_time_frame + num_predictions)
+    predictions = model.predict(prediction_x[:, np.newaxis])
+
+    return np.array(list(zip(prediction_x, predictions))), model.predict, f'N: {n}, L2 a: {alpha}'
+
+
 def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, num_predictions: int, n: int = 20):
     gauss_model = make_pipeline(GaussianFeatures(n), LinearRegression())
 
@@ -190,7 +205,8 @@ def predict_turnip_prices(filepath: str) -> float:
 
     models = {'l': ('Linear Regression', predict_with_linear_model),
               'p': ('Polyfit', predict_with_polyfit),
-              'g': ('Gaussian Features', predict_with_gaussian_features)}
+              'g': ('Gaussian Features', predict_with_gaussian_features),
+              'r': ('Regularized Gaussian', predict_with_regulated_gaussian)}
 
     print('How would you like to predict the next turnip price?')
 
