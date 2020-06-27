@@ -135,7 +135,7 @@ def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series):
     print(f'Model parameters: coefficients: {model.coef_}, intercepts: {model.intercept_}')
 
     next_time_frame = shaped_time_frames[-1] + 1
-    prediction = model.predict([next_time_frame])
+    prediction = np.reshape(model.predict([next_time_frame]), (-1))
     return [next_time_frame,
             prediction], model.predict, f'Coefficient: {model.coef_[0][0]:.2f}, Intercept: {model.intercept_[0]:.2f}'
 
@@ -173,15 +173,16 @@ def plot(time_frames: pd.Series, prices: pd.Series, prediction, model_coefficien
     plt.ylabel('Bells')
 
     for index in range(0, len(prediction), 2):
-        print(index)
         time_frame = prediction[index][0]
-        prediction_point = prediction[index + 1][0]
-        print(prediction_point)
+        prediction_point = np.reshape(prediction[index + 1], (-1))[0]
         annotation_text: str = f'Next price ({time_frame}, {prediction_point:.1f})'
-        print(annotation_text)
         plt.annotate(annotation_text, (time_frame, prediction_point))
 
     plt.show()
+
+
+def get_option_print(option: str) -> str:
+    return f'[{option[0]}]{option[1:]}'
 
 
 def predict_turnip_prices(filepath: str) -> float:
@@ -199,14 +200,17 @@ def predict_turnip_prices(filepath: str) -> float:
     data_print = '\n'.join([f'{time_frames[i]}: {prices[i]}' for i in range(len(time_frames))])
     print(f'Input data: \n{data_print}')
 
-    print('How would you like to predict the next turnip price?')
-    model_input: str = input('[L]inear Regression, [P]olyfit, [I]mproved Linear Regression, [G]aussian Features\n')[
-        0].lower()
-
     models = {'l': ('Linear Regression', predict_with_linear_model),
               'p': ('Polyfit', predict_with_polyfit),
               'i': ('Improved Linear Regression', predict_with_improved_linear_model),
               'g': ('Gaussian Features', predict_with_gaussian_features)}
+
+    print('How would you like to predict the next turnip price?')
+
+    for model_val in models.values():
+        print(f'{get_option_print(model_val[0])}')
+
+    model_input: str = input('> ')[0].lower()
 
     if model_input in models.keys():
         prediction, model, subtitle = models[model_input][1](time_frames, prices)
