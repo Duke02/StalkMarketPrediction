@@ -88,6 +88,10 @@ def parse_args():
                         help='The alpha value to use for regularized models (r). Default value is .1.')
     parser.add_argument('-d', '--degrees', required=False, type=int, default=2,
                         help='The number of degrees to use for the polynomial based models (p). Default is 2.')
+    parser.add_argument('-r', '--add_data', required=False, action='store_true',
+                        help='Add random data to the model processing.')
+    parser.add_argument('-I', '--iterations', required=False, type=int, default=0,
+                        help='The number of iterations to add random data to the input.')
 
     return parser.parse_args(argv[1:])
 
@@ -124,6 +128,22 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
             time_frames += [time_frames[-1] + distance]
 
     return pd.DataFrame(data={'time_frame': time_frames, 'price': prices})
+
+
+def add_artificial_data(df: pd.DataFrame, num_iterations: int = 5) -> pd.DataFrame:
+    values: np.ndarray = df.values
+    output = values
+
+    generator = np.random.default_rng()
+    prices_std_dev: float = values[:, 1].std() / 6.
+    time_frames_std_dev: float = values[:, 0].std() / 6.
+
+    for i in range(num_iterations):
+        multiplier: float = 1 if i % 2 == 0 else -1
+        output = np.vstack((output, values + multiplier * generator.normal(scale=(time_frames_std_dev, prices_std_dev),
+                                                                           size=values.shape)))
+
+    return pd.DataFrame(data={'time_frame': output[:, 0], 'price': output[:, 1]})
 
 
 def plot_learning_curve(model, time_frames: np.ndarray, prices: np.ndarray, cv: int = 5):
@@ -255,10 +275,13 @@ def predict_turnip_prices(args: argparse.Namespace) -> float:
     df_raw: pd.DataFrame = get_data(args.filepath)
     df: pd.DataFrame = organize_data(df_raw)
 
+    if args.add_data:
+        df = add_artificial_data(df, args.iterations)
+
     time_frames = df['time_frame']
     prices = df['price']
 
-    data_print = '\n'.join([f'{time_frames[i]}: {prices[i]}' for i in range(len(time_frames))])
+    data_print = '\n'.join([f'{time_frames[i]:.5f}: {prices[i]:.5f}' for i in range(len(time_frames))])
     print(f'Input data: \n{data_print}')
 
     models = {'l': ('Linear Regression', predict_with_linear_model),
