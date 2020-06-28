@@ -68,6 +68,10 @@ def get_time_frame_dist(dt1: dt.datetime, dt2: dt.datetime) -> int:
 
 
 def parse_args():
+    """
+    Parses the arguments for this program.
+    :return: The Namespace that contains the parsed arguments.
+    """
     parser: argparse.ArgumentParser = argparse.ArgumentParser(
         description='Predict future turnip prices in Animal Crossing: New Horizons')
     parser.add_argument('-f', '--filepath', required=True, type=str,
@@ -123,6 +127,13 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def plot_learning_curve(model, time_frames: np.ndarray, prices: np.ndarray, cv: int = 5):
+    """
+    Plots the training/validation curve for the model with the given data.
+    :param model: The model to be examined.
+    :param time_frames: The independent variables of the data.
+    :param prices: The dependent variables of the data.
+    :param cv: The number of cross-validation folds to perform on the data.
+    """
     # TODO: Input data is too small to perform cross-validation.
     n_samples_used, train_lc, val_lc = learning_curve(model, time_frames, prices, cv=cv)
     plt.plot(n_samples_used, np.mean(train_lc, 1), label='training score')
@@ -132,6 +143,14 @@ def plot_learning_curve(model, time_frames: np.ndarray, prices: np.ndarray, cv: 
 
 def predict_with_regulated_gaussian(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
                                     args: argparse.Namespace):
+    """
+    Performs a Regularized Gaussian Features regression analysis on the given data with the provided args.
+    :param time_frames: The independent variables of the data. Shape = (N_Samples)
+    :param prices: The dependent variables of the data. Shape = (N_Samples)
+    :param num_predictions: The number of predictions to make for future time frames.
+    :param args: The arguments for the program to alter hyper parameters.
+    :return: The predictions of the data (Shape: (N_Samples, 2)), the model's prediction function, and the title for plotting.
+    """
     # Since the data is in the range of 30-500, we can assume that the input data is dense.
     # So an L2 Norm using Ridge is probably best, rather than the L1 Norm, Lasso
 
@@ -148,6 +167,14 @@ def predict_with_regulated_gaussian(time_frames: pd.Series, prices: pd.Series, n
 
 def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
                                    args: argparse.Namespace):
+    """
+    Predicts the future turnip prices using a Gaussian Features model given the provided data and hyper parameters within args.
+    :param time_frames: The time frames that have previously been recorded for the prices.
+    :param prices: The prices for the turnip at those time frames.
+    :param num_predictions: The number of predictions to make for future turnip prices.
+    :param args: The args for the program that hold hyper parameters.
+    :return: The predictions (Shape: (N_Predictions, 2)), the model's prediction function, and the title for plotting.
+    """
     gauss_model = make_pipeline(GaussianFeatures(args.gaussian_features), LinearRegression())
 
     gauss_model.fit(time_frames.values[:, np.newaxis], prices)
