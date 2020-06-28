@@ -2,6 +2,9 @@ import numpy as np
 from sklearn.base import BaseEstimator, TransformerMixin
 
 
+# A good way to understand this is this Stack Exchange: Cross Validated answer:
+# https://stats.stackexchange.com/a/120126
+# Also good thing to know that this is also known as Gaussian Radial Basis Function
 class GaussianFeatures(BaseEstimator, TransformerMixin):
 
     def __init__(self, N, width_factor=2.0):
