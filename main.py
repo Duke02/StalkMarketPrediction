@@ -158,6 +158,8 @@ def plot_learning_curve(model, time_frames: np.ndarray, prices: np.ndarray, cv: 
     n_samples_used, train_lc, val_lc = learning_curve(model, time_frames, prices, cv=cv)
     plt.plot(n_samples_used, np.mean(train_lc, 1), label='training score')
     plt.plot(n_samples_used, np.mean(val_lc, 1), label='validation score')
+    plt.legend(loc='best')
+    plt.ylabel('score')
     plt.show()
 
 
