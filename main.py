@@ -6,7 +6,8 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.pipeline import make_pipeline, Pipeline
+from sklearn.model_selection import learning_curve
+from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import PolynomialFeatures
 
 from gaussian_features import GaussianFeatures
@@ -74,8 +75,8 @@ def parse_args():
     parser.add_argument('-M', '--model', required=False, type=str, choices=['l', 'p', 'g', 'r'], default=None,
                         help='The model to use. A prompt with minor explanations will be provided if this arg isn\'t '
                              'used.')
-    parser.add_argument('-P', '--predictions', required=False, type=int, default=1,
-                        help='The number of possible future turnip prices the model will output. Default is 1.')
+    parser.add_argument('-P', '--predictions', required=False, type=int, default=5,
+                        help='The number of possible future turnip prices the model will output. Default is 5.')
     parser.add_argument('-N', '--gaussian_features', required=False, type=int, default=20,
                         help='The number of gaussian features to use with using the Gaussian-based models (r, '
                              'g). Default is 20.')
@@ -121,6 +122,14 @@ def organize_data(df: pd.DataFrame) -> pd.DataFrame:
     return pd.DataFrame(data={'time_frame': time_frames, 'price': prices})
 
 
+def plot_learning_curve(model, time_frames: np.ndarray, prices: np.ndarray, cv: int = 5):
+    # TODO: Input data is too small to perform cross-validation.
+    n_samples_used, train_lc, val_lc = learning_curve(model, time_frames, prices, cv=cv)
+    plt.plot(n_samples_used, np.mean(train_lc, 1), label='training score')
+    plt.plot(n_samples_used, np.mean(val_lc, 1), label='validation score')
+    plt.show()
+
+
 def predict_with_regulated_gaussian(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
                                     args: argparse.Namespace):
     # Since the data is in the range of 30-500, we can assume that the input data is dense.
@@ -152,34 +161,31 @@ def predict_with_gaussian_features(time_frames: pd.Series, prices: pd.Series, nu
 
 
 def predict_with_polyfit(time_frames: pd.Series, prices: pd.Series, num_predictions: int, args: argparse.Namespace):
-    poly = PolynomialFeatures(degree=args.degrees, include_bias=False)
-    linear = LinearRegression()
-    steps = [('poly', poly), ('linear', linear)]
-    poly_model = Pipeline(steps)
+    poly_model = make_pipeline(PolynomialFeatures(degree=args.degrees, include_bias=False),
+                               LinearRegression())
     poly_model.fit(time_frames[:, np.newaxis], prices)
 
     last_time_frame = time_frames.values[-1]
     prediction_x = np.arange(last_time_frame + 1, last_time_frame + num_predictions)
-    prediction = poly_model.predict(np.reshape(prediction_x, (-1, 1)))
+    prediction = poly_model.predict(prediction_x[:, np.newaxis])
 
     return np.array(list(zip(prediction_x, prediction))), poly_model.predict, f'Degrees: {args.degrees}'
 
 
 def predict_with_linear_model(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
                               args: argparse.Namespace):
-    shaped_time_frames: pd.Series = time_frames.values.reshape((-1, 1))
-    shaped_prices: pd.Series = prices.values.reshape((-1, 1))
-    model: LinearRegression = LinearRegression().fit(shaped_time_frames, shaped_prices)
+    model: LinearRegression = LinearRegression().fit(time_frames.values[:, np.newaxis], prices[:, np.newaxis])
 
     print(f'Model parameters: coefficients: {model.coef_}, intercepts: {model.intercept_}')
 
-    last_time_frame = shaped_time_frames[-1]
+    last_time_frame = time_frames.values[-1]
     prediction_x = np.reshape(np.arange(last_time_frame + 1, last_time_frame + num_predictions), (-1, 1))
 
     prediction = model.predict(prediction_x)
 
     return np.array(list(zip(prediction_x,
-                             prediction))), model.predict, f'Coefficient: {model.coef_[0][0]:.2f}, Intercept: {model.intercept_[0]:.2f}'
+                             prediction))), model.predict, \
+           f'Coefficient: {model.coef_[0][0]:.2f}, Intercept: {model.intercept_[0]:.2f} '
 
 
 def plot(time_frames: pd.Series, prices: pd.Series, prediction, model_coefficients: np.ndarray, name: str,
