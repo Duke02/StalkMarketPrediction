@@ -1,11 +1,13 @@
 import argparse
 import datetime as dt
+import typing
 from sys import argv
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from sklearn.linear_model import LinearRegression, Ridge
+from sklearn.metrics import mean_squared_error as mse
 from sklearn.model_selection import learning_curve
 from sklearn.pipeline import make_pipeline
 from sklearn.preprocessing import PolynomialFeatures
@@ -161,6 +163,104 @@ def plot_learning_curve(model, time_frames: np.ndarray, prices: np.ndarray, cv: 
     plt.legend(loc='best')
     plt.ylabel('score')
     plt.show()
+
+
+def map_pattern(pattern: typing.Union[str, int]) -> typing.Union[str, int, None]:
+    patterns: typing.Dict[str, int] = {
+        'downward': 0,
+        'slow-spike': 1,
+        'sudden-spike': 2,
+        'standard': 3
+    }
+    if type(pattern) is str:
+        return patterns[pattern]
+    elif type(pattern) is int:
+        inverted_patterns: typing.Dict[int, str] = {v: k for k, v in patterns.items()}
+        return inverted_patterns[pattern]
+    return None
+
+
+def get_chances(last_pattern: str) -> typing.Tuple[typing.Dict[str, float], float]:
+    low: float = .25
+    high: float = .75
+    medium: float = .5
+
+    chances: typing.Dict[str, typing.Dict[str, float]] = {
+        'downward': {
+            'standard': medium,
+            'sudden-spike': high,
+            'downward': low,
+            'slow-spike': medium
+        },
+        'standard': {
+            'standard': low,
+            'sudden-spike': medium,
+            'downward': low,
+            'slow-spike': high
+        },
+        'sudden-spike': {
+            'standard': high,
+            'sudden-spike': low,
+            'downward': low,
+            'slow-spike': medium
+        },
+        'slow-spike': {
+            'standard': high,
+            'sudden-spike': medium,
+            'downward': low,
+            'slow-spike': low
+        }
+    }
+
+    return chances[last_pattern], np.average([low, medium, high])
+
+
+def get_pattern(time_frames: pd.Series, prices: pd.Series, last_pattern: str, purchase_price: int) -> str:
+    possibilities: typing.List[str] = ['downward', 'standard', 'slow-spike', 'sudden-spike']
+    chances: typing.Dict[str, float] = {p: 1. / len(possibilities) for p in possibilities}
+
+    chance_modifier: float = 0.05
+
+    if purchase_price < 100:
+        chances['downward'] -= chance_modifier
+        chances['slow-spike'] += chance_modifier
+        chances['sudden-spike'] += chance_modifier
+    else:
+        chances['downward'] += chance_modifier
+        chances['slow-spike'] -= chance_modifier
+        chances['sudden-spike'] -= chance_modifier
+
+    pattern_chances, chance_avg = get_chances(last_pattern)
+    for k, v in pattern_chances.items():
+        chances[k] += v - chance_avg
+
+    linear_model = np.poly1d(np.polyfit(time_frames, prices, deg=1))
+    quad_model = np.poly1d(np.polyfit(time_frames, prices, deg=2))
+
+    linear_mse = mse(linear_model(time_frames), prices)
+    quad_mse = mse(quad_model(time_frames), prices)
+
+    chance_modifier = .25
+    if linear_mse < quad_mse:
+        chances['slow-spike'] -= chance_modifier
+        chances['sudden-spike'] -= chance_modifier
+        if linear_model.coeffs[0] <= -1:
+            chances['downward'] += chance_modifier
+            chances['standard'] -= chance_modifier
+        else:
+            chances['downward'] -= chance_modifier
+            chances['standard'] += chance_modifier
+    else:
+        # TODO: See how I could get the difference between slow and sudden spike
+        # I would assume currently that it would be because the a in
+        # ax**2 + bx + c is greater than a certain value.
+        chances['slow-spike'] += chance_modifier
+        chances['sudden-spike'] += chance_modifier
+        chances['standard'] -= chance_modifier
+        chances['downward'] -= chance_modifier
+
+    # Get the greatest likelihood by sorted it by value increasing.
+    return [k for k, v in sorted(chances.items(), key=lambda i: i[1])][-1]
 
 
 def predict_with_regulated_gaussian(time_frames: pd.Series, prices: pd.Series, num_predictions: int,
